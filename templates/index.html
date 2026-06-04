@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Chatbot</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    #app {
+      position: relative;
+      display: flex;
+      width: 700px;
+      height: 600px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 200px;
+      background: #1e1b4b;
+      display: flex;
+      flex-direction: column;
+      padding: 16px 12px;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    #sidebar h3 {
+      color: #a5b4fc;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .session-btn {
+      background: transparent;
+      color: #c7d2fe;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 10px;
+      text-align: left;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .session-btn:hover { background: rgba(255,255,255,0.1); }
+
+    .session-btn.active {
+      background: #4f46e5;
+      color: white;
+      font-weight: bold;
+    }
+
+    .session-btn .del {
+      font-size: 14px;
+      color: #f87171;
+      visibility: hidden;
+    }
+
+    .session-btn:hover .del { visibility: visible; }
+
+    #new-session-area {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #new-session-input {
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid #4f46e5;
+      background: #2e2a6e;
+      color: white;
+      font-size: 13px;
+      outline: none;
+    }
+
+    #new-session-input::placeholder { color: #818cf8; }
+
+    #new-session-btn {
+      background: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 7px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    #new-session-btn:hover { background: #3730a3; }
+
+    /* ── Chat area ── */
+    #chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    /* ── Header ── */
+    #header {
+      background: #4f46e5;
+      color: white;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    #session-title {
+      font-size: 14px;
+      font-weight: bold;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+    }
+
+    #header-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    #settings-btn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    #settings-btn:hover { background: rgba(255,255,255,0.35); }
+
+    #user-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.5);
+      flex-shrink: 0;
+      object-fit: cover;
+    }
+
+    #user-email {
+      font-size: 11px;
+      color: rgba(255,255,255,0.85);
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #logout-btn {
+      font-size: 11px;
+      color: white;
+      text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 6px;
+      padding: 3px 8px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    #logout-btn:hover { background: rgba(255,255,255,0.2); }
+
+    /* ── Messages ── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .msg-wrapper {
+      display: flex;
+      flex-direction: column;
+      max-width: 80%;
+    }
+
+    .msg-wrapper.user { align-self: flex-end; }
+    .msg-wrapper.bot  { align-self: flex-start; }
+
+    .message {
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .user-msg {
+      background: #4f46e5;
+      color: white;
+      border-radius: 12px 12px 2px 12px;
+    }
+
+    .bot-msg {
+      background: #f1f0fe;
+      color: #1e1b4b;
+      border-radius: 12px 12px 12px 2px;
+    }
+
+    .typing {
+      background: #f1f0fe;
+      color: #888;
+      border-radius: 12px;
+      font-style: italic;
+      padding: 10px 14px;
+      font-size: 14px;
+      align-self: flex-start;
+    }
+
+    .timestamp {
+      font-size: 10px;
+      color: #aaa;
+      margin-top: 3px;
+    }
+
+    .msg-wrapper.user .timestamp { text-align: right; }
+    .msg-wrapper.bot  .timestamp { text-align: left; }
+
+    .divider {
+      text-align: center;
+      font-size: 11px;
+      color: #aaa;
+      margin: 4px 0;
+    }
+
+    #no-session {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #aaa;
+      font-size: 14px;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ── Input area ── */
+    #input-area {
+      display: flex;
+      padding: 12px 16px;
+      border-top: 1px solid #e5e7eb;
+      gap: 8px;
+    }
+
+    #user-input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 24px;
+      border: 1px solid #d1d5db;
+      font-size: 14px;
+      outline: none;
+    }
+
+    #user-input:focus { border-color: #4f46e5; }
+    #user-input:disabled { background: #f9fafb; }
+
+    #send-btn {
+      background: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    #send-btn:hover { background: #3730a3; }
+    #send-btn:disabled { background: #c4b5fd; cursor: not-allowed; }
+
+    /* ── Settings popup ── */
+    #settings-overlay {
+      display: none;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.4);
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
+
+    #settings-overlay.show { display: flex; }
+
+    #settings-panel {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    #settings-panel h2 { font-size: 16px; color: #1e1b4b; }
+    #settings-panel p  { font-size: 13px; color: #888; }
+
+    #personality-input {
+      width: 100%;
+      height: 100px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      font-size: 13px;
+      font-family: Arial, sans-serif;
+      resize: none;
+      outline: none;
+    }
+
+    #personality-input:focus { border-color: #4f46e5; }
+
+    .panel-btns {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .btn-cancel {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      background: white;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .btn-save {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      background: #4f46e5;
+      color: white;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .btn-save:hover { background: #3730a3; }
+
+    .preset-btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .preset {
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid #e0e7ff;
+      background: #eef2ff;
+      color: #4f46e5;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .preset:hover { background: #e0e7ff; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <h3>💬 Sessions</h3>
+    <div id="session-list"></div>
+    <div id="new-session-area">
+      <input id="new-session-input" type="text" placeholder="New session name..."
+             onkeydown="if(event.key==='Enter') createSession()"/>
+      <button id="new-session-btn" onclick="createSession()">+ New Session</button>
+    </div>
+  </div>
+
+  <!-- Chat area -->
+  <div id="chat-area">
+
+    <!-- Header: title | personality | avatar | email | logout -->
+    <div id="header">
+      <span id="session-title">🤖 AI Chatbot</span>
+      <div id="header-right">
+        <button id="settings-btn" onclick="openSettings()">⚙ Personality</button>
+        <img id="user-avatar" src="{{ user_picture }}"
+             onerror="this.style.display='none'" alt="avatar"/>
+        <span id="user-email">{{ user_email }}</span>
+        <a id="logout-btn" href="/logout">Logout</a>
+      </div>
+    </div>
+
+    <div id="messages">
+      <div id="no-session">
+        <span style="font-size: 32px;">💬</span>
+        <span>Create or select a session to start chatting</span>
+      </div>
+    </div>
+
+    <div id="input-area">
+      <input id="user-input" type="text" placeholder="Select a session first..."
+             disabled onkeydown="if(event.key==='Enter') sendMessage()"/>
+      <button id="send-btn" disabled onclick="sendMessage()">➤</button>
+    </div>
+  </div>
+
+  <!-- Settings popup -->
+  <div id="settings-overlay">
+    <div id="settings-panel">
+      <h2>⚙ Bot Personality</h2>
+      <p>Describe how the bot should behave in this session.</p>
+      <div class="preset-btns">
+        <button class="preset" onclick="setPreset('Python tutor')">🐍 Python tutor</button>
+        <button class="preset" onclick="setPreset('Django tutor')">🌐 Django tutor</button>
+        <button class="preset" onclick="setPreset('Maths tutor')">📐 Maths tutor</button>
+        <button class="preset" onclick="setPreset('Friendly assistant')">😊 Friendly assistant</button>
+        <button class="preset" onclick="setPreset('English tutor')">📖 English tutor</button>
+      </div>
+      <textarea id="personality-input" placeholder="e.g. You are a friendly Python tutor..."></textarea>
+      <div class="panel-btns">
+        <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
+        <button class="btn-save" onclick="savePersonality()">Save</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let activeSession = null;
+
+  const presets = {
+    "Python tutor": "You are a friendly Python coding tutor. Explain concepts clearly with simple examples. Keep explanations beginner-friendly. If someone shares buggy code, explain what is wrong and how to fix it.",
+    "Django tutor": "You are an expert Django tutor. Help users build web applications using Django. Explain models, views, templates, and URLs clearly with code examples.",
+    "Maths tutor": "You are a patient maths tutor. Explain mathematical concepts step by step. Use simple language and show working clearly for every problem.",
+    "Friendly assistant": "You are a helpful and friendly assistant. Answer questions clearly and concisely.",
+    "English tutor": "You are an English language tutor. Help users improve their grammar, vocabulary, and writing skills. Give clear explanations and examples."
+  };
+
+  window.onload = async function () {
+    await loadSessions();
+  };
+
+  async function loadSessions() {
+    const res = await fetch("/sessions");
+    const sessions = await res.json();
+    renderSessions(sessions);
+  }
+
+  function renderSessions(sessions) {
+    const list = document.getElementById("session-list");
+    list.innerHTML = "";
+    if (sessions.length === 0) {
+      list.innerHTML = '<p style="color:#6366f1; font-size:12px; padding: 4px;">No sessions yet</p>';
+      return;
+    }
+    sessions.forEach(name => {
+      const btn = document.createElement("button");
+      btn.className = "session-btn" + (name === activeSession ? " active" : "");
+      btn.innerHTML = `<span>💬 ${name}</span><span class="del" onclick="deleteSession(event, '${name}')">✕</span>`;
+      btn.onclick = () => selectSession(name);
+      list.appendChild(btn);
+    });
+  }
+
+  async function createSession() {
+    const input = document.getElementById("new-session-input");
+    const name = input.value.trim();
+    if (!name) return;
+
+    const res = await fetch("/sessions/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+
+    input.value = "";
+    await loadSessions();
+    selectSession(name);
+  }
+
+  async function selectSession(name) {
+    activeSession = name;
+    document.getElementById("session-title").textContent = "💬 " + name;
+    document.getElementById("user-input").disabled = false;
+    document.getElementById("user-input").placeholder = "Type your message...";
+    document.getElementById("send-btn").disabled = false;
+
+    const res = await fetch(`/sessions/${name}/history`);
+    const data = await res.json();
+
+    const messages = document.getElementById("messages");
+    messages.innerHTML = "";
+
+    if (data.messages.length === 0) {
+      addMessage("bot", `Hi! I'm your assistant for the "${name}" session. How can I help? 😊`);
+    } else {
+      addDivider("📂 Previous conversation loaded");
+      data.messages.forEach(msg => addMessage(msg.role, msg.text, msg.time));
+    }
+
+    await loadSessions();
+  }
+
+  async function deleteSession(e, name) {
+    e.stopPropagation();
+    if (!confirm(`Delete session "${name}"?`)) return;
+    await fetch(`/sessions/${name}/delete`, { method: "POST" });
+    if (activeSession === name) {
+      activeSession = null;
+      document.getElementById("session-title").textContent = "🤖 AI Chatbot";
+      document.getElementById("messages").innerHTML = `
+        <div id="no-session">
+          <span style="font-size:32px">💬</span>
+          <span>Create or select a session to start chatting</span>
+        </div>`;
+      document.getElementById("user-input").disabled = true;
+      document.getElementById("user-input").placeholder = "Select a session first...";
+      document.getElementById("send-btn").disabled = true;
+    }
+    await loadSessions();
+  }
+
+  function addMessage(role, text, timeStr = null) {
+    const messages = document.getElementById("messages");
+    const noSession = document.getElementById("no-session");
+    if (noSession) noSession.remove();
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "msg-wrapper " + (role === "user" ? "user" : "bot");
+
+    const div = document.createElement("div");
+    div.className = "message " + (role === "user" ? "user-msg" : "bot-msg");
+    div.textContent = text;
+
+    const time = document.createElement("div");
+    time.className = "timestamp";
+    time.textContent = timeStr || getCurrentTime();
+
+    wrapper.appendChild(div);
+    wrapper.appendChild(time);
+    messages.appendChild(wrapper);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function addDivider(text) {
+    const messages = document.getElementById("messages");
+    const div = document.createElement("div");
+    div.className = "divider";
+    div.textContent = text;
+    messages.appendChild(div);
+  }
+
+  function getCurrentTime() {
+    const now = new Date();
+    let hours = now.getHours();
+    const mins = now.getMinutes().toString().padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+    return `${hours}:${mins} ${ampm}`;
+  }
+
+  async function sendMessage() {
+    if (!activeSession) return;
+    const input = document.getElementById("user-input");
+    const btn = document.getElementById("send-btn");
+    const text = input.value.trim();
+    if (!text) return;
+
+    addMessage("user", text);
+    input.value = "";
+    btn.disabled = true;
+
+    const messages = document.getElementById("messages");
+    const typing = document.createElement("div");
+    typing.className = "typing";
+    typing.id = "typing";
+    typing.textContent = "Thinking...";
+    messages.appendChild(typing);
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+      const res = await fetch(`/sessions/${activeSession}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text })
+      });
+      const data = await res.json();
+      document.getElementById("typing").remove();
+      addMessage("bot", data.reply, data.time);
+    } catch (err) {
+      document.getElementById("typing").remove();
+      addMessage("bot", "⚠️ Error connecting to server.");
+    }
+
+    btn.disabled = false;
+  }
+
+  function openSettings() {
+    if (!activeSession) { alert("Please select a session first!"); return; }
+    document.getElementById("settings-overlay").classList.add("show");
+  }
+
+  function closeSettings() {
+    document.getElementById("settings-overlay").classList.remove("show");
+  }
+
+  function setPreset(name) {
+    document.getElementById("personality-input").value = presets[name];
+  }
+
+  async function savePersonality() {
+    const personality = document.getElementById("personality-input").value.trim();
+    if (!personality) { alert("Personality cannot be empty!"); return; }
+
+    await fetch(`/sessions/${activeSession}/personality`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personality })
+    });
+
+    closeSettings();
+    addDivider("⚙ Bot personality updated");
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+chat_sessions/
+__pycache__/
+*.pyc
+.env
+chatbot.py
+.vscode/
+venv/
