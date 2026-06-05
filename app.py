@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 from authlib.integrations.flask_client import OAuth
 from google import genai
+from google.genai import types
 import json, os, datetime
 
 app = Flask(__name__)
@@ -183,6 +184,47 @@ def chat(name):
 
     save_session(uid, name, data)
     return jsonify({"reply": reply, "time": now})
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+@app.route("/sessions/<name>/describe-image", methods=["POST"])
+@login_required
+def describe_image(name):
+    if "image" not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
+
+    file = request.files["image"]
+    if file.mimetype not in ALLOWED_IMAGE_TYPES:
+        return jsonify({"error": "Unsupported image type"}), 400
+
+    image_bytes = file.read()
+    if len(image_bytes) > 10 * 1024 * 1024:  # 10 MB limit
+        return jsonify({"error": "Image too large (max 10 MB)"}), 400
+
+    caption = request.form.get("caption", "").strip()
+    prompt = caption if caption else "Describe this image in detail."
+
+    uid = current_user_id()
+    data = load_session(uid, name)
+    now = datetime.datetime.now().strftime("%I:%M %p")
+
+    image_part = types.Part.from_bytes(data=image_bytes, mime_type=file.mimetype)
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[image_part, prompt],
+        config={"system_instruction": data["personality"]}
+    )
+
+    reply = response.text
+
+    user_label = f"[Image] {caption}" if caption else "[Image uploaded for description]"
+    data["messages"].append({"role": "user",  "parts": [{"text": user_label}], "time": now})
+    data["messages"].append({"role": "model", "parts": [{"text": reply}],      "time": now})
+    save_session(uid, name, data)
+
+    return jsonify({"reply": reply, "time": now, "user_label": user_label})
+
 
 @app.route("/sessions/<name>/delete", methods=["POST"])
 @login_required
