@@ -24,6 +24,28 @@ google = oauth.register(
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 
+# ── Mood journaling default personality ────────────────
+DEFAULT_MOOD_PERSONALITY = """You are a compassionate mood journaling companion. Your role is to:
+1. Listen and validate the user's feelings
+2. Help them understand their emotions
+3. Provide brief, actionable insights
+4. Ask thoughtful follow-up questions
+5. Be warm, non-judgmental, and supportive
+
+Keep your responses SHORT (2-3 sentences max), crisp, and emotionally intelligent."""
+
+# ── Mood-based response styling ─────────────────────────
+MOOD_STYLES = {
+    "happy": {"color": "#22c55e", "font_size": "16px", "emoji": "😊"},
+    "sad": {"color": "#f87171", "font_size": "15px", "emoji": "🫂"},
+    "anxious": {"color": "#f59e0b", "font_size": "14px", "emoji": "😰"},
+    "angry": {"color": "#dc2626", "font_size": "15px", "emoji": "😤"},
+    "calm": {"color": "#06b6d4", "font_size": "15px", "emoji": "😌"},
+    "neutral": {"color": "#6366f1", "font_size": "14px", "emoji": "🤔"},
+    "grateful": {"color": "#ec4899", "font_size": "16px", "emoji": "🙏"},
+    "overwhelmed": {"color": "#8b5cf6", "font_size": "14px", "emoji": "😵"},
+}
+
 # ── Helper: current logged-in user id ─────────────────
 def current_user_id():
     return session.get("user_id")
@@ -46,9 +68,29 @@ def load_session(user_id, name):
         with open(path, "r") as f:
             return json.load(f)
     return {
-        "personality": "You are a helpful and friendly assistant.",
-        "messages": []
+        "personality": DEFAULT_MOOD_PERSONALITY,
+        "messages": [],
+        "mood_log": []
     }
+
+def detect_mood(text):
+    """Detect mood from user text"""
+    text_lower = text.lower()
+
+    mood_keywords = {
+        "happy": ["happy", "great", "excited", "amazing", "wonderful", "joy", "love"],
+        "sad": ["sad", "unhappy", "depressed", "down", "crying", "lonely", "heartbroken"],
+        "anxious": ["anxious", "nervous", "worried", "stressed", "panic", "afraid", "scared"],
+        "angry": ["angry", "furious", "mad", "frustrated", "irritated", "annoyed", "hate"],
+        "calm": ["calm", "peaceful", "relaxed", "serene", "meditate", "zen"],
+        "grateful": ["grateful", "thankful", "blessed", "appreciate", "thanks"],
+        "overwhelmed": ["overwhelmed", "stressed", "too much", "can't", "drowning"],
+    }
+
+    for mood, keywords in mood_keywords.items():
+        if any(keyword in text_lower for keyword in keywords):
+            return mood
+    return "neutral"
 
 def save_session(user_id, name, data):
     with open(session_file(user_id, name), "w") as f:
@@ -119,8 +161,9 @@ def create_session():
     if os.path.exists(session_file(uid, name)):
         return jsonify({"error": "Session already exists"}), 400
     save_session(uid, name, {
-        "personality": "You are a helpful and friendly assistant.",
-        "messages": []
+        "personality": DEFAULT_MOOD_PERSONALITY,
+        "messages": [],
+        "mood_log": []
     })
     return jsonify({"status": "created", "name": name})
 
@@ -132,11 +175,14 @@ def get_history(name):
         {
             "role": "user" if m["role"] == "user" else "bot",
             "text": m["parts"][0]["text"],
-            "time": m.get("time", "")
+            "time": m.get("time", ""),
+            "mood": m.get("mood", "neutral"),
+            "style": m.get("style", MOOD_STYLES["neutral"])
         }
         for m in data["messages"]
     ]
-    return jsonify({"messages": simple, "personality": data["personality"]})
+    mood_log = data.get("mood_log", [])
+    return jsonify({"messages": simple, "personality": data["personality"], "mood_log": mood_log})
 
 @app.route("/sessions/<name>/personality", methods=["POST"])
 @login_required
@@ -161,11 +207,20 @@ def chat(name):
     data = load_session(uid, name)
     now = datetime.datetime.now().strftime("%I:%M %p")
 
+    # Detect user mood
+    detected_mood = detect_mood(user_message)
+
     data["messages"].append({
         "role": "user",
         "parts": [{"text": user_message}],
-        "time": now
+        "time": now,
+        "mood": detected_mood
     })
+
+    # Log mood
+    if "mood_log" not in data:
+        data["mood_log"] = []
+    data["mood_log"].append({"mood": detected_mood, "time": now})
 
     contents = [{"role": m["role"], "parts": m["parts"]} for m in data["messages"]]
 
@@ -176,14 +231,19 @@ def chat(name):
     )
 
     reply = response.text
+
+    # Get style for bot response (mirror user's mood)
+    style = MOOD_STYLES.get(detected_mood, MOOD_STYLES["neutral"])
+
     data["messages"].append({
         "role": "model",
         "parts": [{"text": reply}],
-        "time": now
+        "time": now,
+        "style": style
     })
 
     save_session(uid, name, data)
-    return jsonify({"reply": reply, "time": now})
+    return jsonify({"reply": reply, "time": now, "style": style, "mood": detected_mood})
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
